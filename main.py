@@ -3,6 +3,9 @@ from pydantic import BaseModel
 from fastapi import WebSocket, WebSocketDisconnect
 import json
 import datetime
+from fastapi.responses import HTMLResponse
+import asyncio
+import json
 
 clients = set()
 
@@ -27,21 +30,28 @@ async def move(command: MoveCommand):
         "data": command.dict(),
     }
 
+    print(f"Payload: {payload}")
+    print(f"Clients: {len(clients)}")
+    dead = []
     for ws in clients:
-        await ws.send_text(json.dumps(payload))
+        try:
+            await ws.send_text(json.dumps(payload))
+        except:
+            dead.append(ws)
 
-    return {"status": "ok"}
+    for ws in dead:
+        clients.remove(ws)
 
 
 @app.websocket("/ws/telemetry")
-async def telemetry_stream(ws: WebSocket):
-    await ws.accept()
-    clients.add(ws)
-    print("[antenna] Client connected to telemetry stream")
-
-    try:
-        while True:
-            await ws.receive_text() 
-    except WebSocketDisconnect:
-        clients.remove(ws)
-        print("[antenna] Client disconnected")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    clients.add(websocket)
+    while True:
+        # Simulate telemetry
+        data = {
+            "timestamp": "ts-123",
+            "joints": [1.0, 2.0, 3.0]
+        }
+        await websocket.send_text(json.dumps(data))
+        await asyncio.sleep(1)  # send every 1s
